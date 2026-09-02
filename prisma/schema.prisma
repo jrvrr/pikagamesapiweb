@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id            BigInt    @id @default(autoincrement())
+  nombre        String    @db.VarChar(100)
+  apellidos     String    @db.VarChar(100)
+  email         String    @unique @db.VarChar(150)
+  password_hash String
+  rol           String    @default("cliente") @db.VarChar(20)
+  activo        Boolean   @default(true)
+  created_at    DateTime  @default(now()) @db.Timestamptz
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  carritos      Carrito[]
+  pedidos       Pedido[]
+}
+
+model Videojuego {
+  id          BigInt    @id @default(autoincrement())
+  titulo      String    @db.VarChar(200)
+  descripcion String?
+  imagen_url  String?
+  consola     String?   @db.VarChar(100)
+  activo      Boolean   @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+  updated_at  DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  productos   ProductoVideojuego[]
+}
+
+model ProductoVideojuego {
+  id            BigInt    @id @default(autoincrement())
+  videojuego_id BigInt
+  tipo_cuenta   String    @db.VarChar(20) // principal/secundaria
+  precio        Decimal   @db.Decimal(10, 2)
+  stock         Int       @default(0)
+  activo        Boolean   @default(true)
+  created_at    DateTime  @default(now()) @db.Timestamptz
+
+  videojuego    Videojuego @relation(fields: [videojuego_id], references: [id])
+  promociones   PromocionProducto[]
+  carrito_items CarritoDetalle[]
+  pedido_items  PedidoDetalle[]
+  cuentas       CuentaProducto[]
+
+  @@unique([videojuego_id, tipo_cuenta])
+}
+
+model Promocion {
+  id          BigInt    @id @default(autoincrement())
+  nombre      String    @db.VarChar(150)
+  descripcion String?
+  tipo        String    @db.VarChar(20) // porcentaje/monto
+  valor       Decimal   @db.Decimal(10, 2)
+  fecha_inicio DateTime @db.Timestamptz
+  fecha_fin   DateTime  @db.Timestamptz
+  activo      Boolean   @default(true)
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  productos   PromocionProducto[]
+}
+
+model PromocionProducto {
+  promocion_id BigInt
+  producto_id  BigInt
+
+  promocion    Promocion          @relation(fields: [promocion_id], references: [id], onDelete: Cascade)
+  producto     ProductoVideojuego @relation(fields: [producto_id], references: [id], onDelete: Cascade)
+
+  @@id([promocion_id, producto_id])
+}
+
+model Carrito {
+  id         BigInt    @id @default(autoincrement())
+  usuario_id BigInt
+  estado     String    @default("activo") @db.VarChar(20)
+  created_at DateTime  @default(now()) @db.Timestamptz
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  usuario    Usuario   @relation(fields: [usuario_id], references: [id])
+  detalles   CarritoDetalle[]
+}
+
+model CarritoDetalle {
+  id              BigInt    @id @default(autoincrement())
+  carrito_id      BigInt
+  producto_id     BigInt
+  cantidad        Int       @default(1)
+  precio_unitario Decimal   @db.Decimal(10, 2)
+
+  carrito         Carrito   @relation(fields: [carrito_id], references: [id], onDelete: Cascade)
+  producto        ProductoVideojuego @relation(fields: [producto_id], references: [id])
+}
+
+model Pedido {
+  id         BigInt    @id @default(autoincrement())
+  usuario_id BigInt
+  subtotal   Decimal   @db.Decimal(10, 2)
+  descuento  Decimal   @default(0) @db.Decimal(10, 2)
+  total      Decimal   @db.Decimal(10, 2)
+  estado     String    @default("pendiente_pago") @db.VarChar(30)
+  created_at DateTime  @default(now()) @db.Timestamptz
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz
+
+  usuario    Usuario   @relation(fields: [usuario_id], references: [id])
+  detalles   PedidoDetalle[]
+  pago       Pago?
+  entrega    Entrega?
+  cuentas    CuentaProducto[]
+}
+
+model PedidoDetalle {
+  id                   BigInt    @id @default(autoincrement())
+  pedido_id            BigInt
+  producto_id          BigInt
+  titulo_snapshot      String    @db.VarChar(200)
+  tipo_cuenta_snapshot String    @db.VarChar(20)
+  precio_unitario      Decimal   @db.Decimal(10, 2)
+  descuento_unitario   Decimal   @default(0) @db.Decimal(10, 2)
+  cantidad             Int       @default(1)
+  total_linea          Decimal   @db.Decimal(10, 2)
+
+  pedido               Pedido    @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  producto             ProductoVideojuego @relation(fields: [producto_id], references: [id])
+}
+
+model Pago {
+  id                 BigInt    @id @default(autoincrement())
+  pedido_id          BigInt    @unique
+  metodo             String    @db.VarChar(30) // paypal/transferencia
+  estado             String    @default("pendiente") @db.VarChar(30)
+  referencia_externa String?   @db.VarChar(200)
+  monto              Decimal   @db.Decimal(10, 2)
+  fecha_pago         DateTime? @db.Timestamptz
+  created_at         DateTime  @default(now()) @db.Timestamptz
+
+  pedido             Pedido    @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  comprobante        Comprobante?
+}
+
+model Comprobante {
+  id               BigInt    @id @default(autoincrement())
+  pago_id          BigInt    @unique
+  archivo_url      String
+  nombre_archivo   String?   @db.VarChar(255)
+  mime_type        String?   @db.VarChar(100)
+  estado           String    @default("pendiente_revision") @db.VarChar(30)
+  observaciones    String?
+  created_at       DateTime  @default(now()) @db.Timestamptz
+
+  pago             Pago      @relation(fields: [pago_id], references: [id], onDelete: Cascade)
+}
+
+model Entrega {
+  id           BigInt    @id @default(autoincrement())
+  pedido_id    BigInt    @unique
+  estado       String    @default("pendiente") @db.VarChar(30)
+  entregado_at DateTime? @db.Timestamptz
+  notas        String?
+
+  pedido       Pedido    @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+}
+
+model CuentaProducto {
+  id                    BigInt    @id @default(autoincrement())
+  producto_id           BigInt
+  identificador_interno String    @unique @db.VarChar(100)
+  datos_cuenta_cifrados String
+  estado                String    @default("disponible") @db.VarChar(30)
+  pedido_id             BigInt?
+  entregado_at          DateTime? @db.Timestamptz
+  created_at            DateTime  @default(now()) @db.Timestamptz
+
+  producto              ProductoVideojuego @relation(fields: [producto_id], references: [id])
+  pedido                Pedido?            @relation(fields: [pedido_id], references: [id])
+}
