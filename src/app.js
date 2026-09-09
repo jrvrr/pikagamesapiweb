@@ -18,6 +18,7 @@ const authRoutes = require('./routes/auth.routes');
 const videojuegoRoutes = require('./routes/videojuego.routes');
 const pedidoRoutes = require('./routes/pedido.routes');
 const comentarioRoutes = require('./routes/comentario.routes');
+const favoritosRoutes = require('./routes/favoritos.routes');
 
 // Rutas base
 app.get('/', (req, res) => {
@@ -28,6 +29,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/videojuegos', videojuegoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/comentarios', comentarioRoutes);
+app.use('/api/favoritos', favoritosRoutes);
+
+// Sync database (creates new tables like favoritos if they don't exist)
+const { sequelize } = require('./models');
+sequelize.sync({ alter: true }).then(() => {
+  console.log('Base de datos sincronizada');
+}).catch(err => {
+  console.error('Error al sincronizar la base de datos:', err.message);
+});
 
 const PORT = process.env.PORT || 5000;
 
