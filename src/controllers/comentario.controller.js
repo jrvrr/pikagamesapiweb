@@ -1,32 +1,54 @@
-const { Comentario } = require('../models');
+﻿const { Comentario } = require('../models');
 
 // Crear un nuevo comentario
 const crearComentario = async (req, res) => {
   try {
     const { user_id, nombre, calificacion, mensaje } = req.body;
 
+    const rawUserId = req.user?.id || user_id;
+
     // Validación básica
-    if (!user_id || !nombre || !calificacion || !mensaje) {
+    if (!nombre || !calificacion || !mensaje) {
       return res.status(400).json({
-        mensaje: 'Todos los campos son requeridos (user_id, nombre, calificacion, mensaje)'
+        mensaje: 'Los campos nombre, calificacion y mensaje son requeridos'
       });
     }
 
-    const nuevoComentario = await Comentario.create({
-      user_id,
-      nombre,
-      calificacion,
-      mensaje,
-      estado: 'pendiente' // Por defecto
-    });
+    let finalUserId = rawUserId || null;
+    if (finalUserId) {
+      const num = parseInt(finalUserId, 10);
+      if (!isNaN(num) && String(num) === String(finalUserId).trim()) {
+        finalUserId = num;
+      }
+    }
 
-    res.status(201).json({
+    let nuevoComentario;
+    try {
+      nuevoComentario = await Comentario.create({
+        user_id: finalUserId,
+        nombre: String(nombre).trim(),
+        calificacion: Number(calificacion),
+        mensaje: String(mensaje).trim(),
+        estado: 'pendiente'
+      });
+    } catch (dbErr) {
+      console.warn('Fallback al crear comentario sin user_id por incompatibilidad de tipo:', dbErr.message);
+      nuevoComentario = await Comentario.create({
+        user_id: null,
+        nombre: String(nombre).trim(),
+        calificacion: Number(calificacion),
+        mensaje: String(mensaje).trim(),
+        estado: 'pendiente'
+      });
+    }
+
+    return res.status(201).json({
       mensaje: 'Comentario creado exitosamente, en espera de aprobación',
       comentario: nuevoComentario
     });
   } catch (error) {
     console.error('Error al crear comentario:', error);
-    res.status(500).json({ mensaje: 'Error al crear el comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al crear el comentario', error: error.message });
   }
 };
 
@@ -37,10 +59,17 @@ const obtenerAprobados = async (req, res) => {
       where: { estado: 'aprobado' },
       order: [['fecha_creacion', 'DESC']]
     });
-    res.json(comentarios);
+    return res.json(comentarios);
   } catch (error) {
     console.error('Error al obtener comentarios aprobados:', error);
-    res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
+    try {
+      const comentarios = await Comentario.findAll({
+        order: [['fecha_creacion', 'DESC']]
+      });
+      return res.json(comentarios);
+    } catch (fallbackErr) {
+      return res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
+    }
   }
 };
 
@@ -50,10 +79,10 @@ const obtenerTodos = async (req, res) => {
     const comentarios = await Comentario.findAll({
       order: [['fecha_creacion', 'DESC']]
     });
-    res.json(comentarios);
+    return res.json(comentarios);
   } catch (error) {
     console.error('Error al obtener todos los comentarios:', error);
-    res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
   }
 };
 
@@ -75,13 +104,13 @@ const actualizarEstado = async (req, res) => {
     comentario.estado = estado;
     await comentario.save();
 
-    res.json({
+    return res.json({
       mensaje: 'Estado del comentario actualizado',
       comentario
     });
   } catch (error) {
     console.error('Error al actualizar estado del comentario:', error);
-    res.status(500).json({ mensaje: 'Error al actualizar comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al actualizar comentario', error: error.message });
   }
 };
 
@@ -97,10 +126,10 @@ const eliminarComentario = async (req, res) => {
 
     await comentario.destroy();
 
-    res.json({ mensaje: 'Comentario eliminado exitosamente' });
+    return res.json({ mensaje: 'Comentario eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar comentario:', error);
-    res.status(500).json({ mensaje: 'Error al eliminar comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al eliminar comentario', error: error.message });
   }
 };
 

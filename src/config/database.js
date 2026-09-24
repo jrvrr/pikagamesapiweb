@@ -1,8 +1,14 @@
-const { Sequelize } = require('sequelize');
+﻿const { Sequelize } = require('sequelize');
 const dns = require('dns');
 
-// Forzar la resolución IPv4 primero (útil para Supabase y Node 18+)
-dns.setDefaultResultOrder('ipv4first');
+// Configuración opcional de orden de DNS sin bloquear IPv6
+try {
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('verbatim');
+  }
+} catch (e) {
+  // Ignorar errores en entornos donde no se permite modificar la configuración DNS
+}
 
 // Requerir explícitamente pg para que Vercel empaquete el módulo
 require('pg');
@@ -17,7 +23,7 @@ if (!dbUrl) {
 
 const sequelize = new Sequelize(dbUrl, {
   dialect: 'postgres',
-  logging: false, // Cambiar a console.log para ver las queries SQL
+  logging: false,
   dialectOptions: {
     ssl: {
       require: true,
@@ -31,6 +37,7 @@ const sequelize = new Sequelize(dbUrl, {
     idle: 20000
   }
 });
+
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
