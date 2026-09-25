@@ -19,6 +19,7 @@ const videojuegoRoutes = require('./routes/videojuego.routes');
 const pedidoRoutes = require('./routes/pedido.routes');
 const comentarioRoutes = require('./routes/comentario.routes');
 const favoritosRoutes = require('./routes/favoritos.routes');
+const paypalRoutes = require('./routes/paypal.routes');
 
 // Rutas base
 app.get('/', (req, res) => {
@@ -30,6 +31,7 @@ app.use('/api/videojuegos', videojuegoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/comentarios', comentarioRoutes);
 app.use('/api/favoritos', favoritosRoutes);
+app.use('/api/paypal', paypalRoutes);
 
 // Sync database (creates new tables like favoritos if they don't exist)
 const { sequelize } = require('./models');
