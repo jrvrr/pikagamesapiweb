@@ -8,7 +8,7 @@ const Favorito = sequelize.define('Favorito', {
     autoIncrement: true,
   },
   usuario_id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.UUID,
     allowNull: false,
   },
   rawg_game_id: {

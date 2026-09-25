@@ -8,7 +8,7 @@ const Carrito = sequelize.define('Carrito', {
     autoIncrement: true,
   },
   usuario_id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.UUID,
     allowNull: false,
   },
   estado: {
