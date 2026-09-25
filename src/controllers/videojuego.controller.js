@@ -11,6 +11,23 @@ const obtenerTodos = async (req, res) => {
   }
 };
 
+const obtenerPorId = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const videojuego = await Videojuego.findByPk(id, {
+      include: [ProductoVideojuego]
+    });
+
+    if (!videojuego) {
+      return res.status(404).json({ message: 'Videojuego no encontrado' });
+    }
+
+    res.json(videojuego);
+  } catch (error) {
+    res.status(500).json({ message: 'Error en el servidor', error: error.message });
+  }
+};
+
 const crear = async (req, res) => {
   try {
     const nuevoVideojuego = await Videojuego.create(req.body);
@@ -20,4 +37,5 @@ const crear = async (req, res) => {
   }
 };
 
-module.exports = { obtenerTodos, crear };
+module.exports = { obtenerTodos, obtenerPorId, crear };
+
