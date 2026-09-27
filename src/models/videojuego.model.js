@@ -7,6 +7,10 @@ const Videojuego = sequelize.define('Videojuego', {
     primaryKey: true,
     autoIncrement: true,
   },
+  rawg_id: {
+    type: DataTypes.BIGINT,
+    unique: true,
+  },
   titulo: {
     type: DataTypes.STRING(200),
     allowNull: false,

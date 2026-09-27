@@ -23,6 +23,15 @@ const Pago = sequelize.define('Pago', {
   },
   referencia_externa: {
     type: DataTypes.STRING(200),
+    unique: true,
+  },
+  paypal_request_id: {
+    type: DataTypes.UUID,
+    unique: true,
+  },
+  paypal_capture_id: {
+    type: DataTypes.STRING(64),
+    unique: true,
   },
   monto: {
     type: DataTypes.DECIMAL(10, 2),
