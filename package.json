@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "node --test tests/pedido.test.js"
   },
   "keywords": [],
   "author": "",

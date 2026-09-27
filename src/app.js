@@ -20,6 +20,7 @@ const pedidoRoutes = require('./routes/pedido.routes');
 const comentarioRoutes = require('./routes/comentario.routes');
 const favoritosRoutes = require('./routes/favoritos.routes');
 const paypalRoutes = require('./routes/paypal.routes');
+const productoVideojuegoRoutes = require('./routes/productoVideojuego.routes');
 
 // Rutas base
 app.get('/', (req, res) => {
@@ -28,6 +29,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/videojuegos', videojuegoRoutes);
+app.use('/api/productos', productoVideojuegoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/comentarios', comentarioRoutes);
 app.use('/api/favoritos', favoritosRoutes);
