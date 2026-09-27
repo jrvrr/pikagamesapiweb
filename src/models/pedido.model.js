@@ -8,7 +8,7 @@ const Pedido = sequelize.define('Pedido', {
     autoIncrement: true,
   },
   usuario_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.BIGINT,
     allowNull: false,
   },
   subtotal: {

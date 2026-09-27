@@ -221,13 +221,14 @@ test('una creación ambigua vencida no crea otra orden', async () => {
 test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante', async () => {
   const jwt = require('jsonwebtoken');
   const secret = 'sandbox-test-secret';
+  const authOwner = '9223372036854775807';
   for (const [token, configured, expected] of [
     ['invalid', secret, 401], [jwt.sign({}, secret), secret, 401],
-    [jwt.sign({ user: { id: owner } }, secret), undefined, 503],
-    [jwt.sign({ user: { id: owner } }, secret), secret, 200],
+    [jwt.sign({ user: { id: authOwner } }, secret), undefined, 503],
+    [jwt.sign({ user: { id: authOwner } }, secret), secret, 200],
   ]) {
     const middleware = load('middlewares/auth.js', { '../config/auth.config': { secret: configured },
-      '../models': { Usuario: { findByPk: async () => ({ id: owner, rol: 'cliente', activo: true }) } } });
+      '../models': { Usuario: { findByPk: async () => ({ id: authOwner, rol: 'cliente', activo: true }) } } });
     const req = { header: () => `Bearer ${token}` };
     const res = { code: 200, status(code) { this.code = code; return this; }, json() {} };
     let next = false; await middleware(req, res, () => { next = true; });

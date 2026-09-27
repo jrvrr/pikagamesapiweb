@@ -2,5 +2,5 @@
 -- Si existen duplicados normalizados, el índice falla y la transacción se revierte.
 BEGIN;
 CREATE UNIQUE INDEX IF NOT EXISTS usuarios_email_normalizado_unique
-  ON users (lower(btrim(correo)));
+  ON usuarios (lower(btrim(email)));
 COMMIT;

@@ -1,4 +1,4 @@
-﻿const { DataTypes } = require('sequelize');
+const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const Comentario = sequelize.define('Comentario', {
@@ -8,7 +8,7 @@ const Comentario = sequelize.define('Comentario', {
     primaryKey: true,
   },
   user_id: {
-    type: DataTypes.STRING,
+    type: DataTypes.BIGINT,
     allowNull: true,
   },
   nombre: {
