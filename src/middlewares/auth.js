@@ -1,20 +1,19 @@
 const jwt = require('jsonwebtoken');
 const authConfig = require('../config/auth.config');
 
-const auth = (req, res, next) => {
-  const token = req.header('Authorization');
-  
-  if (!token) {
-    return res.status(401).json({ message: 'No hay token, autorización denegada' });
-  }
-
+module.exports = (req, res, next) => {
+  if (!authConfig.secret) return res.status(503).json({ message: 'Autenticación no configurada' });
+  const match = /^Bearer ([^\s]+)$/.exec(req.header('Authorization') || '');
+  if (!match) return res.status(401).json({ message: 'Se requiere autenticación' });
   try {
-    const decoded = jwt.verify(token.replace('Bearer ', ''), authConfig.secret);
+    const decoded = jwt.verify(match[1], authConfig.secret, { algorithms: ['HS256'] });
+    if (!decoded.user || typeof decoded.user.id !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded.user.id)) {
+      throw new Error('Identidad inválida');
+    }
     req.user = decoded.user;
     next();
-  } catch (err) {
+  } catch {
     res.status(401).json({ message: 'El token no es válido' });
   }
 };
-
-module.exports = auth;
