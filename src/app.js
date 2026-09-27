@@ -35,14 +35,7 @@ app.use('/api/comentarios', comentarioRoutes);
 app.use('/api/favoritos', favoritosRoutes);
 app.use('/api/paypal', paypalRoutes);
 
-// Sync database (creates new tables like favoritos if they don't exist)
-const { sequelize } = require('./models');
-sequelize.sync({ alter: true }).then(() => {
-  console.log('Base de datos sincronizada');
-}).catch(err => {
-  console.error('Error al sincronizar la base de datos:', err.message);
-});
-
+// El esquema se administra exclusivamente con migraciones SQL explícitas.
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== 'production') {
