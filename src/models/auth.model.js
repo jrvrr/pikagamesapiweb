@@ -16,6 +16,7 @@ const Usuario = sequelize.define('Usuario', {
     allowNull: false, 
   },
   email: {
+    field: 'correo',
     type: DataTypes.STRING(50),
     allowNull: false,
     unique: true,
@@ -35,7 +36,7 @@ const Usuario = sequelize.define('Usuario', {
     defaultValue: true,
   }
 }, {
-  tableName: 'usuarios',
+  tableName: 'users',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',

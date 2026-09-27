@@ -29,6 +29,7 @@ function setup() {
       if (state.fail) throw new Error('SQL privado');
       assert.equal(where.attribute.fn, 'lower');
       assert.equal(where.attribute.args[0].fn, 'btrim');
+      assert.equal(where.attribute.args[0].args[0].col, 'correo');
       return rows.filter(row => row.email.trim().toLowerCase() === where.logic).slice(0, limit);
     },
     async findByPk(id) {
@@ -214,4 +215,16 @@ test('arranque de producción y desarrollo nunca sincroniza ni altera esquema', 
     }), { process: { env: { NODE_ENV: env } } });
     assert.equal(ddl, 0);
   }
+});
+
+test('Usuario mapea la API email a users.correo sin conectar ni cambiar esquema', () => {
+  const { Sequelize } = require('sequelize');
+  const sequelize = new Sequelize('postgres://test:test@localhost/test', { logging: false });
+  const Usuario = load('models/auth.model.js', { '../config/database': { sequelize } });
+  assert.equal(Usuario.getTableName(), 'users');
+  assert.equal(Usuario.rawAttributes.email.field, 'correo');
+  const sql = sequelize.getQueryInterface().queryGenerator.selectQuery(Usuario.getTableName(), {
+    attributes: [['correo', 'email']],
+  });
+  assert.match(sql, /"correo" AS "email" FROM "users"/);
 });

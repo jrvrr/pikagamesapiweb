@@ -7,7 +7,7 @@ const { profileInput, emailInput, passwordInput } = require('../config/auth.vali
 
 // Coincide con el índice versionado; también reconoce correos históricos sin reescribirlos.
 const findEmail = (email) => Usuario.findAll({
-  where: where(fn('lower', fn('btrim', col('email'))), email), limit: 2,
+  where: where(fn('lower', fn('btrim', col('correo'))), email), limit: 2,
 });
 const authError = (res, error) => {
   if (error.name === 'SequelizeUniqueConstraintError') {
