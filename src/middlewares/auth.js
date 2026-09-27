@@ -9,7 +9,7 @@ module.exports = async (req, res, next) => {
   try {
     decoded = jwt.verify(match[1], authConfig.secret, { algorithms: ['HS256'] });
     if (!decoded.user || typeof decoded.user.id !== 'string' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded.user.id)) {
+        !/^[1-9]\d{0,18}$/.test(decoded.user.id) || BigInt(decoded.user.id) > 9223372036854775807n) {
       throw new Error('Identidad inválida');
     }
   } catch {

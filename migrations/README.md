@@ -8,8 +8,8 @@ Prisma tiene un schema separado, pero no hay historial de migraciones Prisma; no
 Antes de aplicar 20260927-auth-email-unique.sql, respaldar la BD y revisar:
 
 ```sql
-SELECT lower(btrim(correo)) AS email_normalizado, count(*)
-FROM users GROUP BY lower(btrim(correo)) HAVING count(*) > 1;
+SELECT lower(btrim(email)) AS email_normalizado, count(*)
+FROM usuarios GROUP BY lower(btrim(email)) HAVING count(*) > 1;
 ```
 
 Si devuelve filas, detener el despliegue y revisar las cuentas manualmente. El código
