@@ -3,44 +3,16 @@
 // Crear un nuevo comentario
 const crearComentario = async (req, res) => {
   try {
-    const { user_id, nombre, calificacion, mensaje } = req.body;
-
-    const rawUserId = req.user?.id || user_id;
-
-    // Validación básica
-    if (!nombre || !calificacion || !mensaje) {
-      return res.status(400).json({
-        mensaje: 'Los campos nombre, calificacion y mensaje son requeridos'
-      });
+    const { nombre, calificacion, mensaje } = req.body || {};
+    if (typeof nombre !== 'string' || !nombre.trim() || nombre.trim().length > 255 ||
+        typeof mensaje !== 'string' || !mensaje.trim() || mensaje.trim().length > 5000 ||
+        !Number.isInteger(calificacion) || calificacion < 1 || calificacion > 5) {
+      return res.status(400).json({ mensaje: 'Nombre, mensaje y calificación (entero de 1 a 5) válidos son requeridos' });
     }
-
-    let finalUserId = rawUserId || null;
-    if (finalUserId) {
-      const num = parseInt(finalUserId, 10);
-      if (!isNaN(num) && String(num) === String(finalUserId).trim()) {
-        finalUserId = num;
-      }
-    }
-
-    let nuevoComentario;
-    try {
-      nuevoComentario = await Comentario.create({
-        user_id: finalUserId,
-        nombre: String(nombre).trim(),
-        calificacion: Number(calificacion),
-        mensaje: String(mensaje).trim(),
-        estado: 'pendiente'
-      });
-    } catch (dbErr) {
-      console.warn('Fallback al crear comentario sin user_id por incompatibilidad de tipo:', dbErr.message);
-      nuevoComentario = await Comentario.create({
-        user_id: null,
-        nombre: String(nombre).trim(),
-        calificacion: Number(calificacion),
-        mensaje: String(mensaje).trim(),
-        estado: 'pendiente'
-      });
-    }
+    const nuevoComentario = await Comentario.create({
+      user_id: req.user.id,
+      nombre: nombre.trim(), calificacion, mensaje: mensaje.trim(), estado: 'pendiente',
+    });
 
     return res.status(201).json({
       mensaje: 'Comentario creado exitosamente, en espera de aprobación',
@@ -48,7 +20,7 @@ const crearComentario = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al crear comentario:', error);
-    return res.status(500).json({ mensaje: 'Error al crear el comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al crear el comentario' });
   }
 };
 
@@ -62,14 +34,7 @@ const obtenerAprobados = async (req, res) => {
     return res.json(comentarios);
   } catch (error) {
     console.error('Error al obtener comentarios aprobados:', error);
-    try {
-      const comentarios = await Comentario.findAll({
-        order: [['fecha_creacion', 'DESC']]
-      });
-      return res.json(comentarios);
-    } catch (fallbackErr) {
-      return res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
-    }
+    return res.status(503).json({ mensaje: 'No se pudieron obtener los comentarios aprobados' });
   }
 };
 
@@ -82,7 +47,7 @@ const obtenerTodos = async (req, res) => {
     return res.json(comentarios);
   } catch (error) {
     console.error('Error al obtener todos los comentarios:', error);
-    return res.status(500).json({ mensaje: 'Error al obtener comentarios', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al obtener comentarios' });
   }
 };
 
@@ -90,7 +55,10 @@ const obtenerTodos = async (req, res) => {
 const actualizarEstado = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ mensaje: 'Identificador inválido' });
+    }
+    const { estado } = req.body || {};
 
     if (!['pendiente', 'aprobado', 'rechazado'].includes(estado)) {
       return res.status(400).json({ mensaje: 'Estado no válido' });
@@ -110,7 +78,7 @@ const actualizarEstado = async (req, res) => {
     });
   } catch (error) {
     console.error('Error al actualizar estado del comentario:', error);
-    return res.status(500).json({ mensaje: 'Error al actualizar comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al actualizar comentario' });
   }
 };
 
@@ -118,6 +86,9 @@ const actualizarEstado = async (req, res) => {
 const eliminarComentario = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ mensaje: 'Identificador inválido' });
+    }
 
     const comentario = await Comentario.findByPk(id);
     if (!comentario) {
@@ -129,7 +100,7 @@ const eliminarComentario = async (req, res) => {
     return res.json({ mensaje: 'Comentario eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar comentario:', error);
-    return res.status(500).json({ mensaje: 'Error al eliminar comentario', error: error.message });
+    return res.status(500).json({ mensaje: 'Error al eliminar comentario' });
   }
 };
 

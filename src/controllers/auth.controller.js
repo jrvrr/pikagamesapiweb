@@ -2,13 +2,32 @@ const { Usuario } = require('../models');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const authConfig = require('../config/auth.config');
+const { where, fn, col } = require('sequelize');
+const { profileInput, emailInput, passwordInput } = require('../config/auth.validation');
+
+// Coincide con el índice versionado; también reconoce correos históricos sin reescribirlos.
+const findEmail = (email) => Usuario.findAll({
+  where: where(fn('lower', fn('btrim', col('correo'))), email), limit: 2,
+});
+const authError = (res, error) => {
+  if (error.name === 'SequelizeUniqueConstraintError') {
+    return res.status(400).json({ message: 'El correo ya está en uso' });
+  }
+  return res.status(500).json({ message: 'Error en el servidor' });
+};
 
 const registrar = async (req, res) => {
   try {
-    const { nombre, apellidos, email, password } = req.body;
-    let usuario = await Usuario.findOne({ where: { email } });
+    if (!authConfig.secret) return res.status(503).json({ message: 'Autenticación no configurada' });
+    const input = profileInput(req.body);
+    const password = req.body?.password;
+    const error = input.error || passwordInput(password, true);
+    if (error) return res.status(400).json({ message: error });
+    const { nombre, apellidos, email } = input.value;
+    const matches = await findEmail(email);
+    let usuario;
     
-    if (usuario) {
+    if (matches.length) {
       return res.status(400).json({ message: 'El usuario ya existe' });
     }
 
@@ -28,16 +47,20 @@ const registrar = async (req, res) => {
 
     res.status(201).json({ token });
   } catch (error) {
-    res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    authError(res, error);
   }
 };
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const usuario = await Usuario.findOne({ where: { email } });
+    if (!authConfig.secret) return res.status(503).json({ message: 'Autenticación no configurada' });
+    const email = emailInput(req.body?.email);
+    const password = req.body?.password;
+    if (!email || passwordInput(password)) return res.status(400).json({ message: 'Credenciales inválidas' });
+    const matches = await findEmail(email);
+    const usuario = matches.length === 1 ? matches[0] : null;
 
-    if (!usuario) {
+    if (!usuario || usuario.activo !== true) {
       return res.status(400).json({ message: 'Credenciales inválidas' });
     }
 
@@ -51,7 +74,7 @@ const login = async (req, res) => {
 
     res.json({ token });
   } catch (error) {
-    res.status(500).json({ message: 'Error en el servidor' });
+    authError(res, error);
   }
 };
 
@@ -67,13 +90,15 @@ const getMe = async (req, res) => {
 
     res.json(usuario);
   } catch (error) {
-    res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    authError(res, error);
   }
 };
 
 const updateProfile = async (req, res) => {
   try {
-    const { nombre, apellidos, email } = req.body;
+    const input = profileInput(req.body, true);
+    if (input.error) return res.status(400).json({ message: input.error });
+    const { email } = input.value;
     const usuario = await Usuario.findByPk(req.user.id);
 
     if (!usuario) {
@@ -81,16 +106,14 @@ const updateProfile = async (req, res) => {
     }
 
     // Comprobar si el email ya existe y es de otro usuario
-    if (email && email !== usuario.email) {
-      const emailExists = await Usuario.findOne({ where: { email } });
-      if (emailExists) {
+    if (email) {
+      const matches = await findEmail(email);
+      if (matches.some((match) => match.id !== usuario.id)) {
         return res.status(400).json({ message: 'El correo ya está en uso por otra cuenta' });
       }
     }
 
-    usuario.nombre = nombre || usuario.nombre;
-    usuario.apellidos = apellidos || usuario.apellidos;
-    usuario.email = email || usuario.email;
+    Object.assign(usuario, input.value);
 
     await usuario.save();
 
@@ -100,13 +123,15 @@ const updateProfile = async (req, res) => {
 
     res.json({ message: 'Perfil actualizado con éxito', usuario: usuarioActualizado });
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar el perfil', error: error.message });
+    authError(res, error);
   }
 };
 
 const updatePassword = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body || {};
+    const error = passwordInput(currentPassword) || passwordInput(newPassword, true);
+    if (error) return res.status(400).json({ message: error });
     const usuario = await Usuario.findByPk(req.user.id);
 
     if (!usuario) {
@@ -125,7 +150,7 @@ const updatePassword = async (req, res) => {
 
     res.json({ message: 'Contraseña actualizada con éxito' });
   } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar la contraseña', error: error.message });
+    authError(res, error);
   }
 };
 

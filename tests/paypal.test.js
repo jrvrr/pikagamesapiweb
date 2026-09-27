@@ -218,7 +218,7 @@ test('una creación ambigua vencida no crea otra orden', async () => {
   assert.equal((await app.call('crearOrden')).code, 409); assert.equal(app.controls.creates, 0);
 });
 
-test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante', () => {
+test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante', async () => {
   const jwt = require('jsonwebtoken');
   const secret = 'sandbox-test-secret';
   for (const [token, configured, expected] of [
@@ -226,10 +226,11 @@ test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante',
     [jwt.sign({ user: { id: owner } }, secret), undefined, 503],
     [jwt.sign({ user: { id: owner } }, secret), secret, 200],
   ]) {
-    const middleware = load('middlewares/auth.js', { '../config/auth.config': { secret: configured } });
+    const middleware = load('middlewares/auth.js', { '../config/auth.config': { secret: configured },
+      '../models': { Usuario: { findByPk: async () => ({ id: owner, rol: 'cliente', activo: true }) } } });
     const req = { header: () => `Bearer ${token}` };
     const res = { code: 200, status(code) { this.code = code; return this; }, json() {} };
-    let next = false; middleware(req, res, () => { next = true; });
+    let next = false; await middleware(req, res, () => { next = true; });
     assert.equal(res.code, expected); assert.equal(next, expected === 200);
   }
 });
