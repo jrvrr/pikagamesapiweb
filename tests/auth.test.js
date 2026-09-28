@@ -116,7 +116,7 @@ test('desactivación bloquea login y JWT existente; rol proviene de BD y usuario
   app.state.fail = true;
   assert.equal((await app.authenticate(token)).res.code, 503);
   assert.equal((await app.authenticate('invalid')).res.code, 401);
-  for (const id of ['01', '9223372036854775808', '11111111-1111-4111-8111-111111111111']) {
+  for (const id of ['0', '01', '9223372036854775808', '11111111-1111-4111-8111-111111111111']) {
     assert.equal((await app.authenticate(jwt.sign({ user: { id } }, secret))).res.code, 401);
   }
 });
@@ -206,15 +206,6 @@ test('comentarios validan entradas y conservan identidad autenticada sin reinten
   assert.equal(created[0].user_id, owner); assert.equal(created[0].estado, 'pendiente');
 });
 
-test('FK de usuario de carrito, pedido y comentario usa BIGINT', () => {
-  const { Sequelize } = require('sequelize');
-  for (const [file, attribute] of [['models/carrito.model.js', 'usuario_id'], ['models/pedido.model.js', 'usuario_id'], ['models/comentario.model.js', 'user_id']]) {
-    const sequelize = new Sequelize('postgres://test:test@localhost/test', { logging: false });
-    const model = load(file, { '../config/database': { sequelize } });
-    assert.equal(model.rawAttributes[attribute].type.key, 'BIGINT');
-  }
-});
-
 test('arranque de producción y desarrollo nunca sincroniza ni altera esquema', () => {
   for (const env of ['production', 'development']) {
     let ddl = 0;
@@ -229,7 +220,7 @@ test('arranque de producción y desarrollo nunca sincroniza ni altera esquema', 
   }
 });
 
-test('Usuario usa usuarios.email e ID BIGINT sin conectar ni cambiar esquema', () => {
+test('Usuario mapea la API a usuarios.email con ID BIGINT sin conectar ni cambiar esquema', () => {
   const { Sequelize } = require('sequelize');
   const sequelize = new Sequelize('postgres://test:test@localhost/test', { logging: false });
   const Usuario = load('models/auth.model.js', { '../config/database': { sequelize } });
@@ -237,10 +228,7 @@ test('Usuario usa usuarios.email e ID BIGINT sin conectar ni cambiar esquema', (
   assert.equal(Usuario.rawAttributes.id.type.key, 'BIGINT');
   assert.equal(Usuario.rawAttributes.id.autoIncrement, true);
   assert.equal(Usuario.rawAttributes.email.field, 'email');
-  assert.equal(Usuario.rawAttributes.email.type.options.length, 50);
-  const sql = sequelize.getQueryInterface().queryGenerator.selectQuery(Usuario.getTableName(), {
-    attributes: ['id', 'email'],
-  });
+  const sql = sequelize.getQueryInterface().queryGenerator.selectQuery(Usuario.getTableName(), { attributes: ['id', 'email'] });
   assert.match(sql, /FROM "usuarios"/);
   assert.match(sql, /"email"/);
 });

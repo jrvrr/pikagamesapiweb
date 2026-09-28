@@ -18,7 +18,7 @@ function setup(catalogo = [producto()], fallo) {
   let current;
   const checkTransaction = (options) => assert.equal(options.transaction, current);
   const models = {
-    Videojuego: {},
+    Videojuego: { async findOrCreate(options) { checkTransaction(options); state.juego = copy(options); return [{ id: '10' }, true]; } },
     sequelize: {
       async transaction(callback) {
         current = { pedidos: [], detalles: [] };
@@ -38,6 +38,11 @@ function setup(catalogo = [producto()], fallo) {
       },
     },
     ProductoVideojuego: {
+      async findOrCreate(options) {
+        checkTransaction(options); state.producto = copy(options);
+        catalogo.push(producto({ id: '5', stock: 0, tipo_cuenta: options.where.tipo_cuenta }));
+        return [{ id: '5' }, true];
+      },
       async findAll(options) {
         checkTransaction(options);
         assert.equal(options.include[0].model, models.Videojuego);
@@ -118,13 +123,13 @@ test('manipular importes no cambia pedido ni detalles calculados en servidor', a
 
 test('suma varios productos en centavos y permite identificadores BIGINT como texto', async () => {
   const id = '9007199254740993';
-  const { crear, state } = setup([producto({ precio: '0.10' }), producto({ id, precio: '0.29' })]);
+  const { crear, state } = setup([producto({ precio: '0.10' }), producto({ id, precio: '0.29', tipo_cuenta: 'secundaria' })]);
   const res = await crear({ productos: [{ producto_id: 1, cantidad: 3 }, { producto_id: id, cantidad: 3 }] });
   assert.equal(res.code, 201);
-  assert.equal(res.body.subtotal, '1.17');
-  assert.equal(res.body.total, '1.17');
+  assert.equal(res.body.subtotal, '2730.00');
+  assert.equal(res.body.total, '2730.00');
   assert.equal(res.body.descuento, '0.00');
-  assert.deepEqual(state.detalles.map((d) => d.total_linea), ['0.30', '0.87']);
+  assert.deepEqual(state.detalles.map((d) => d.total_linea), ['1950.00', '780.00']);
 });
 
 test('rechaza lista vacía, entradas malformadas, IDs inválidos y cantidades inválidas', async () => {
@@ -154,10 +159,10 @@ test('rechaza duplicados incluso mezclando ID numérico y texto', async () => {
   assert.equal(state.ids, undefined);
 });
 
-test('rechaza productos inexistentes, inactivos, sin juego o sin stock suficiente', async () => {
+test('rechaza productos inexistentes, inactivos, sin juego ', async () => {
   for (const catalogo of [[], [producto({ activo: false })],
     [producto({ Videojuego: { titulo: 'Inactivo', activo: false } })],
-    [producto({ Videojuego: null })], [producto({ stock: 0 })], [producto({ stock: 1 })]]) {
+    [producto({ Videojuego: null })]]) {
     const { crear, state } = setup(catalogo);
     assert.equal((await crear(solicitud())).code, 400);
     assert.equal(state.rollbacks, 1);
@@ -174,31 +179,32 @@ test('un producto inválido rechaza el pedido completo', async () => {
   assert.deepEqual(state.detalles, []);
 });
 
-test('acepta límite DECIMAL y precio cero del servidor; rechaza desbordamiento', async () => {
-  for (const precio of ['99999999.99', '0.00', '10', '10.5']) {
-    const { crear } = setup([producto({ precio, stock: 1 })]);
-    const res = await crear({ productos: [{ producto_id: 1, cantidad: 1 }] });
-    assert.equal(res.code, 201);
-    assert.equal(res.body.total, Number(precio).toFixed(2));
+test('tarifas fijas, disponibilidad ilimitada y limite monetario', async () => {
+  for (const [tipo_cuenta, total] of [['principal', '1300.00'], ['secundaria', '520.00']]) {
+    const { crear } = setup([producto({ tipo_cuenta, precio: '0.01', stock: 0 })]);
+    assert.equal((await crear(solicitud())).body.total, total);
   }
-  const { crear, state } = setup([producto({ precio: '99999999.99' })]);
-  assert.equal((await crear(solicitud())).code, 400);
-  assert.deepEqual(state.pedidos, []);
-  const sum = setup([producto({ precio: '99999999.99' }), producto({ id: '2', precio: '0.01' })]);
-  assert.equal((await sum.crear({ productos: [{ producto_id: 1, cantidad: 1 }, { producto_id: 2, cantidad: 1 }] })).code, 400);
-  assert.deepEqual(sum.state.pedidos, []);
+  assert.equal((await setup().crear({ productos: [{ producto_id: 1, cantidad: 2147483647 }] })).code, 400);
 });
 
-test('precio corrupto en servidor devuelve 500 sin filtrar información interna', async () => {
-  for (const precio of [null, '-1.00', '1.001', 'NaN', 'Infinity', '1e2', '100000000.00']) {
-    const { crear, state } = setup([producto({ precio })]);
-    const res = await crear(solicitud());
-    assert.equal(res.code, 500);
-    assert.deepEqual(res.body, { message: 'Error al crear pedido' });
-    assert.equal(state.rollbacks, 1);
-    assert.equal(state.logs.length, 1);
-    assert.deepEqual(state.pedidos, []);
+test('crea juego y producto bajo demanda con tarifa del servidor', async () => {
+  for (const [tipo_cuenta, total] of [['principal', '650.00'], ['secundaria', '260.00']]) {
+    const { crear, state } = setup([]);
+    const res = await crear({ juego: { rawg_id: 3328, titulo: 'The Witcher 3', tipo_cuenta, precio: '0.01' } });
+    assert.equal(res.code, 201);
+    assert.equal(res.body.total, total);
+    assert.equal(state.producto.defaults.precio, total);
+    assert.equal(state.juego.where.rawg_id, 3328);
+    assert.equal(state.detalles[0].producto_id, '5');
   }
+});
+
+test('rechaza juego malformado y peticiones ambiguas', async () => {
+  for (const juego of [null, {}, { rawg_id: -1 }, { rawg_id: 3328, titulo: '', tipo_cuenta: 'principal' },
+    { rawg_id: 3328, titulo: 'Juego', tipo_cuenta: 'gratis' }]) {
+    assert.equal((await setup([]).crear({ juego })).code, 400);
+  }
+  assert.equal((await setup().crear({ juego: {}, productos: [] })).code, 400);
 });
 
 test('fallos de consulta, pedido, detalles o commit no dejan escrituras parciales', async () => {
