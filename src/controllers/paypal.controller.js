@@ -100,30 +100,29 @@ const procesarOrden = async (id, userId, capture = false) => {
     if (captures.length > 1) fail(409, 'Capturas múltiples requieren revisión');
     const captured = captures[0];
     if (!captured) {
-      if (orden.status === 'COMPLETED' || pago.estado === 'completado') fail(503, 'Falta referencia de captura');
+      if (orden.status === 'COMPLETED' || pago.estado === 'aprobado') fail(503, 'Falta referencia de captura');
       return { confirmed: false, status: orden.status, pedidoId: String(pedido.id), paypalOrderId: id };
     }
     if (!captured.id || captured.amount?.currency_code !== 'MXN' ||
         cents(captured.amount.value) !== cents(pago.monto) ||
         (pago.paypal_capture_id && pago.paypal_capture_id !== captured.id)) fail(409, 'Captura inconsistente');
 
-    const states = { COMPLETED: 'completado', PENDING: 'pendiente', DECLINED: 'rechazado',
-      FAILED: 'rechazado', REFUNDED: 'reembolsado', PARTIALLY_REFUNDED: 'reembolso_parcial' };
+    const states = { COMPLETED: 'aprobado', PENDING: 'pendiente', DECLINED: 'rechazado',
+      FAILED: 'rechazado', REFUNDED: 'cancelado', PARTIALLY_REFUNDED: 'cancelado', REVERSED: 'cancelado' };
     const estado = states[captured.status];
     if (!estado) fail(503, 'Estado de captura desconocido');
-    // Un evento atrasado no revive un pago reembolsado ni revierte un pago confirmado.
-    const terminal = ['reembolsado', 'reembolso_parcial', 'rechazado'];
-    if ((terminal.includes(pago.estado) && estado === 'completado') ||
-        (pago.estado === 'completado' && ['pendiente', 'rechazado'].includes(estado)) ||
-        (pago.estado === 'reembolsado' && estado !== 'reembolsado')) {
+    // La BD solo admite estados definidos en sus CHECK; un evento atrasado no revive un pago cancelado.
+    const terminal = ['cancelado', 'rechazado'];
+    if ((terminal.includes(pago.estado) && estado === 'aprobado') ||
+        (pago.estado === 'aprobado' && ['pendiente', 'rechazado'].includes(estado))) {
       return { confirmed: false, status: pago.estado, pedidoId: String(pedido.id), paypalOrderId: id };
     }
-    if (estado === 'completado' && orden.status !== 'COMPLETED') fail(503, 'Orden sin completar');
+    if (estado === 'aprobado' && orden.status !== 'COMPLETED') fail(503, 'Orden sin completar');
     await pago.update({ estado, paypal_capture_id: captured.id,
-      ...(estado === 'completado' ? { fecha_pago: pago.fecha_pago || new Date() } : {}),
+      ...(estado === 'aprobado' ? { fecha_pago: pago.fecha_pago || new Date() } : {}),
     }, { transaction });
 
-    if (estado === 'completado') {
+    if (estado === 'aprobado') {
       if (!['pendiente_pago', 'pagado', 'entregado'].includes(pedido.estado)) fail(409, 'Pedido requiere revisión');
       if (pedido.estado === 'pendiente_pago') await pedido.update({ estado: 'pagado' }, { transaction });
       const receipt = {
@@ -136,11 +135,11 @@ const procesarOrden = async (id, userId, capture = false) => {
       }
       await Entrega.findOrCreate({ where: { pedido_id: pedido.id }, defaults: { estado: 'pendiente' }, transaction });
     } else if (terminal.includes(estado)) {
-      await pedido.update({ estado }, { transaction });
-      await Comprobante.update({ estado }, { where: { pago_id: pago.id }, transaction });
-      await Entrega.update({ estado: 'retenida' }, { where: { pedido_id: pedido.id, estado: 'pendiente' }, transaction });
+      await pedido.update({ estado: 'cancelado' }, { transaction });
+      await Comprobante.update({ estado: 'rechazado' }, { where: { pago_id: pago.id }, transaction });
+      await Entrega.update({ estado: 'cancelado' }, { where: { pedido_id: pedido.id, estado: 'pendiente' }, transaction });
     }
-    return { confirmed: estado === 'completado', status: captured.status, pagoEstado: estado,
+    return { confirmed: estado === 'aprobado', status: captured.status, pagoEstado: estado,
       pedidoId: String(pedido.id), paypalOrderId: id, captureId: captured.id, total: String(pago.monto), currency: 'MXN' };
   });
 };
@@ -169,14 +168,14 @@ const webhook = async (req, res) => {
         const captureLink = event.resource?.links?.find((link) => link.rel === 'up')?.href;
         const captureId = event.resource?.supplementary_data?.related_ids?.capture_id ||
           (event.resource_type === 'capture' ? event.resource?.id : undefined) ||
-          /^https:\/\/api(?:-m)?\.sandbox\.paypal\.com\/v2\/payments\/captures\/([A-Z0-9]+)$/.exec(captureLink || '')?.[1];
+          /^https:\/\/api(?:-m)?(?:\.sandbox)?\.paypal\.com\/v2\/payments\/captures\/([A-Z0-9]+)$/.exec(captureLink || '')?.[1];
         const pago = captureId && await Pago.findOne({ where: { paypal_capture_id: captureId, metodo: 'paypal' } });
         id = pago?.referencia_externa;
       }
       if (!id) fail(503, 'Evento pendiente de asociar a una orden');
       const result = await procesarOrden(orderId(id));
       if (['PAYMENT.CAPTURE.COMPLETED', 'CHECKOUT.ORDER.COMPLETED'].includes(event.event_type) &&
-          !result.confirmed && !['reembolsado', 'reembolso_parcial', 'rechazado'].includes(result.pagoEstado || result.status)) {
+          !result.confirmed && !['cancelado', 'rechazado'].includes(result.pagoEstado || result.status)) {
         fail(503, 'PayPal aún no confirma el evento; reintentar');
       }
     }
