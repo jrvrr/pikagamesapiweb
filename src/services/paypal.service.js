@@ -2,7 +2,7 @@ const { PAYPAL_CONFIG } = require('../config/paypal');
 
 const getAccessToken = async () => {
   const { clientId, clientSecret, baseUrl } = PAYPAL_CONFIG;
-  if (!clientId || !clientSecret) throw new Error('Faltan credenciales PayPal Sandbox');
+  if (!clientId || !clientSecret) throw new Error('Faltan credenciales PayPal');
   const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -55,7 +55,7 @@ const capturarOrden = (id, requestId) => request(`/v2/checkout/orders/${encodeUR
 const obtenerOrden = (id) => request(`/v2/checkout/orders/${encodeURIComponent(id)}`);
 
 const verificarWebhook = async ({ headers, body }) => {
-  if (!PAYPAL_CONFIG.webhookId) throw new Error('Falta PAYPAL_WEBHOOK_ID Sandbox');
+  if (!PAYPAL_CONFIG.webhookId) throw new Error('Falta PAYPAL_WEBHOOK_ID del entorno configurado');
   const names = ['auth-algo', 'cert-url', 'transmission-id', 'transmission-sig', 'transmission-time'];
   if (names.some((name) => !headers[`paypal-${name}`])) return false;
   const result = await request('/v1/notifications/verify-webhook-signature', {

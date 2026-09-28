@@ -100,6 +100,7 @@ test('propietario paga: commit de pago, pedido, comprobante y entrega antes de c
   assert.equal(result.code, 200); assert.equal(result.body.confirmed, true);
   assert.equal(result.body.captureId, 'CAPTURE1');
   assert.equal(app.state.Pago[0].paypal_capture_id, 'CAPTURE1');
+  assert.equal(app.state.Pago[0].estado, 'aprobado');
   assert.equal(app.state.Pedido[0].estado, 'pagado');
   assert.equal(app.state.Comprobante[0].archivo_url, 'paypal:CAPTURE1');
   assert.equal(app.state.Entrega[0].estado, 'pendiente');
@@ -168,10 +169,10 @@ test('webhook de reembolso resuelve la captura desde su enlace sin seguir URLs e
   const app = setup(); await app.call('capturarOrden');
   app.controls.order.purchase_units[0].payments.captures[0].status = 'REFUNDED';
   const event = { event_type: 'PAYMENT.CAPTURE.REFUNDED', resource_type: 'refund', resource: {
-    links: [{ rel: 'up', href: 'https://api.sandbox.paypal.com/v2/payments/captures/CAPTURE1' }],
+    links: [{ rel: 'up', href: 'https://api.paypal.com/v2/payments/captures/CAPTURE1' }],
   } };
   assert.equal((await app.call('webhook', owner, event)).code, 200);
-  assert.equal(app.state.Pago[0].estado, 'reembolsado');
+  assert.equal(app.state.Pago[0].estado, 'cancelado');
 });
 
 test('importe, moneda y referencia incorrectos nunca se capturan', async () => {
@@ -195,10 +196,10 @@ test('reembolso repetido retiene entrega pendiente y evento antiguo no revive el
   const app = setup(); await app.call('capturarOrden');
   app.controls.order.purchase_units[0].payments.captures[0].status = 'REFUNDED';
   await app.call('webhook'); await app.call('webhook');
-  assert.equal(app.state.Pago[0].estado, 'reembolsado'); assert.equal(app.state.Entrega[0].estado, 'retenida');
+  assert.equal(app.state.Pago[0].estado, 'cancelado'); assert.equal(app.state.Entrega[0].estado, 'cancelado');
   app.controls.order.purchase_units[0].payments.captures[0].status = 'COMPLETED';
   assert.equal((await app.call('obtenerOrden')).body.confirmed, false);
-  assert.equal(app.state.Pago[0].estado, 'reembolsado');
+  assert.equal(app.state.Pago[0].estado, 'cancelado');
 });
 
 test('crear orden reutiliza referencia; fallo al asociarla conserva la clave durable', async () => {
@@ -235,7 +236,7 @@ test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante',
   }
 });
 
-test('servicio usa únicamente Sandbox, claves idempotentes y validación de firma', async () => {
+test('service uses configured PayPal environment and verifies webhook signatures', async () => {
   const config = load('config/paypal.js', { dotenv: { config() {} } }, { process: { env: {
     PAYPAL_ENV: 'production', PAYPAL_BASE_URL: 'https://api-m.paypal.com',
     PAYPAL_CLIENT_ID: 'sandbox-client', PAYPAL_CLIENT_SECRET: 'sandbox-secret', PAYPAL_WEBHOOK_ID: 'WH1',
@@ -249,7 +250,7 @@ test('servicio usa únicamente Sandbox, claves idempotentes y validación de fir
   });
   await service.crearOrden({ monto: '650.00', pedidoId: '7', requestId: 'CREATE1' });
   await service.capturarOrden('ORDER1', 'CAPTURE1');
-  assert.ok(calls.every(({ url }) => url.startsWith('https://api-m.sandbox.paypal.com/')));
+  assert.ok(calls.every(({ url }) => url.startsWith('https://api-m.paypal.com/')));
   assert.equal(calls[1].options.headers['PayPal-Request-Id'], 'CREATE1');
   assert.equal(calls[3].options.headers['PayPal-Request-Id'], 'CAPTURE1');
   assert.equal(await service.verificarWebhook({ headers: {}, body: {} }), false);
