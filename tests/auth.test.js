@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const validation = require('../src/config/auth.validation');
 
-const owner = '11111111-1111-4111-8111-111111111111';
+const owner = '9223372036854775807';
 const secret = 'phase-three-test-only';
 const load = (file, dependencies, extra = {}) => {
   const context = { module: { exports: {} }, Buffer, console: { error() {} },
@@ -29,7 +29,7 @@ function setup() {
       if (state.fail) throw new Error('SQL privado');
       assert.equal(where.attribute.fn, 'lower');
       assert.equal(where.attribute.args[0].fn, 'btrim');
-      assert.equal(where.attribute.args[0].args[0].col, 'correo');
+      assert.equal(where.attribute.args[0].args[0].col, 'email');
       return rows.filter(row => row.email.trim().toLowerCase() === where.logic).slice(0, limit);
     },
     async findByPk(id) {
@@ -116,6 +116,9 @@ test('desactivación bloquea login y JWT existente; rol proviene de BD y usuario
   app.state.fail = true;
   assert.equal((await app.authenticate(token)).res.code, 503);
   assert.equal((await app.authenticate('invalid')).res.code, 401);
+  for (const id of ['0', '01', '9223372036854775808', '11111111-1111-4111-8111-111111111111']) {
+    assert.equal((await app.authenticate(jwt.sign({ user: { id } }, secret))).res.code, 401);
+  }
 });
 
 test('cambio de contraseña exige la actual; acepta máximo ASCII y UTF-8 y permite login posterior', async () => {
@@ -217,14 +220,15 @@ test('arranque de producción y desarrollo nunca sincroniza ni altera esquema', 
   }
 });
 
-test('Usuario mapea la API email a users.correo sin conectar ni cambiar esquema', () => {
+test('Usuario mapea la API a usuarios.email con ID BIGINT sin conectar ni cambiar esquema', () => {
   const { Sequelize } = require('sequelize');
   const sequelize = new Sequelize('postgres://test:test@localhost/test', { logging: false });
   const Usuario = load('models/auth.model.js', { '../config/database': { sequelize } });
-  assert.equal(Usuario.getTableName(), 'users');
-  assert.equal(Usuario.rawAttributes.email.field, 'correo');
-  const sql = sequelize.getQueryInterface().queryGenerator.selectQuery(Usuario.getTableName(), {
-    attributes: [['correo', 'email']],
-  });
-  assert.match(sql, /"correo" AS "email" FROM "users"/);
+  assert.equal(Usuario.getTableName(), 'usuarios');
+  assert.equal(Usuario.rawAttributes.id.type.key, 'BIGINT');
+  assert.equal(Usuario.rawAttributes.id.autoIncrement, true);
+  assert.equal(Usuario.rawAttributes.email.field, 'email');
+  const sql = sequelize.getQueryInterface().queryGenerator.selectQuery(Usuario.getTableName(), { attributes: ['id', 'email'] });
+  assert.match(sql, /FROM "usuarios"/);
+  assert.match(sql, /"email"/);
 });

@@ -3,8 +3,8 @@ const { sequelize } = require('../config/database');
 
 const Usuario = sequelize.define('Usuario', {
   id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
+    type: DataTypes.BIGINT,
+    autoIncrement: true,
     primaryKey: true,
   },
   nombre: {
@@ -16,7 +16,6 @@ const Usuario = sequelize.define('Usuario', {
     allowNull: false, 
   },
   email: {
-    field: 'correo',
     type: DataTypes.STRING(50),
     allowNull: false,
     unique: true,
@@ -36,7 +35,7 @@ const Usuario = sequelize.define('Usuario', {
     defaultValue: true,
   }
 }, {
-  tableName: 'users',
+  tableName: 'usuarios',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',

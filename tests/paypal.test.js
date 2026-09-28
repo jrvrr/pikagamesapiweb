@@ -13,7 +13,7 @@ const load = (file, dependencies, extra = {}) => {
   return context.module.exports;
 };
 const copy = (value) => JSON.parse(JSON.stringify(value));
-const owner = '11111111-1111-4111-8111-111111111111';
+const owner = '9223372036854775807';
 
 function setup() {
   let state = {
