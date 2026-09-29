@@ -44,6 +44,9 @@ const crearOrden = async (req, res) => {
         pedido_id: pedido.id, metodo: 'paypal', estado: 'pendiente', monto: pedido.total,
         paypal_request_id: randomUUID(),
       }, { transaction });
+      else if (!pago.paypal_request_id && !pago.referencia_externa) {
+        await pago.update({ paypal_request_id: randomUUID() }, { transaction });
+      }
     });
     const result = await sequelize.transaction(async (transaction) => {
       const pedido = await ownedPedido(id, req.user.id, transaction);

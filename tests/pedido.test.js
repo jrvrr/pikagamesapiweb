@@ -11,22 +11,27 @@ const producto = (overrides = {}) => ({
   id: '1', precio: '650.00', stock: 10, activo: true, tipo_cuenta: 'principal',
   Videojuego: { titulo: 'Juego del servidor', activo: true }, ...overrides,
 });
-const solicitud = () => ({ productos: [{ producto_id: '1', cantidad: 2 }] });
+const solicitud = () => ({
+  request_id: '11111111-1111-4111-8111-111111111111',
+  metodo_pago: 'paypal',
+  productos: [{ producto_id: '1', cantidad: 2 }],
+});
 
 function setup(catalogo = [producto()], fallo) {
-  const state = { pedidos: [], detalles: [], commits: 0, rollbacks: 0, logs: [] };
+  const state = { pedidos: [], detalles: [], pagos: [], commits: 0, rollbacks: 0, logs: [] };
   let current;
   const checkTransaction = (options) => assert.equal(options.transaction, current);
   const models = {
-    Videojuego: { async findOrCreate(options) { checkTransaction(options); state.juego = copy(options); return [{ id: '10' }, true]; } },
+    Videojuego: {},
     sequelize: {
       async transaction(callback) {
-        current = { pedidos: [], detalles: [] };
+        current = { pedidos: [], detalles: [], pagos: [] };
         try {
           const result = await callback(current);
           if (fallo === 'commit') throw new Error('detalle interno del commit');
           state.pedidos.push(...current.pedidos);
           state.detalles.push(...current.detalles);
+          state.pagos.push(...current.pagos);
           state.commits++;
           return result;
         } catch (error) {
@@ -38,11 +43,6 @@ function setup(catalogo = [producto()], fallo) {
       },
     },
     ProductoVideojuego: {
-      async findOrCreate(options) {
-        checkTransaction(options); state.producto = copy(options);
-        catalogo.push(producto({ id: '5', stock: 0, tipo_cuenta: options.where.tipo_cuenta }));
-        return [{ id: '5' }, true];
-      },
       async findAll(options) {
         checkTransaction(options);
         assert.equal(options.include[0].model, models.Videojuego);
@@ -53,6 +53,11 @@ function setup(catalogo = [producto()], fallo) {
       },
     },
     Pedido: {
+      async findOne(options) {
+        checkTransaction(options);
+        return state.pedidos.find((pedido) => pedido.usuario_id === options.where.usuario_id &&
+          pedido.request_id === options.where.request_id) || null;
+      },
       async create(values, options) {
         checkTransaction(options);
         if (fallo === 'pedido') throw new Error('detalle interno de pedido');
@@ -68,6 +73,18 @@ function setup(catalogo = [producto()], fallo) {
         current.detalles.push(copy(values[0]));
         if (fallo === 'detalles') throw new Error('detalle interno de inserción');
         current.detalles.push(...copy(values.slice(1)));
+      },
+    },
+    Pago: {
+      async findOne(options) {
+        checkTransaction(options);
+        return state.pagos.find((pago) => pago.pedido_id === options.where.pedido_id) || null;
+      },
+      async create(values, options) {
+        checkTransaction(options);
+        if (fallo === 'pago') throw new Error('detalle interno del pago');
+        current.pagos.push(copy(values));
+        return values;
       },
     },
   };
@@ -112,24 +129,27 @@ test('manipular importes no cambia pedido ni detalles calculados en servidor', a
     assert.equal(res.body.total, '1300.00');
     assert.equal(res.body.usuario_id, 'usuario-autenticado');
     assert.equal(res.body.estado, 'pendiente_pago');
+    assert.equal(res.body.metodo_pago, 'paypal');
     assert.deepEqual(state.detalles, [{
       pedido_id: '77', producto_id: '1', titulo_snapshot: 'Juego del servidor',
       tipo_cuenta_snapshot: 'principal', precio_unitario: '650.00',
       descuento_unitario: '0.00', cantidad: 2, total_linea: '1300.00',
     }]);
     assert.equal(state.commits, 1);
+    assert.deepEqual(state.pagos, [{ pedido_id: '77', metodo: 'paypal', estado: 'pendiente', monto: '1300.00' }]);
   }
 });
 
 test('suma varios productos en centavos y permite identificadores BIGINT como texto', async () => {
   const id = '9007199254740993';
   const { crear, state } = setup([producto({ precio: '0.10' }), producto({ id, precio: '0.29', tipo_cuenta: 'secundaria' })]);
-  const res = await crear({ productos: [{ producto_id: 1, cantidad: 3 }, { producto_id: id, cantidad: 3 }] });
+  const res = await crear({ ...solicitud(), request_id: '22222222-2222-4222-8222-222222222222', metodo_pago: 'transferencia', productos: [{ producto_id: 1, cantidad: 3 }, { producto_id: id, cantidad: 3 }] });
   assert.equal(res.code, 201);
-  assert.equal(res.body.subtotal, '2730.00');
-  assert.equal(res.body.total, '2730.00');
+  assert.equal(res.body.subtotal, '1.17');
+  assert.equal(res.body.total, '1.17');
   assert.equal(res.body.descuento, '0.00');
-  assert.deepEqual(state.detalles.map((d) => d.total_linea), ['1950.00', '780.00']);
+  assert.deepEqual(state.detalles.map((d) => d.total_linea), ['0.30', '0.87']);
+  assert.equal(state.pagos[0].metodo, 'transferencia');
 });
 
 test('rechaza lista vacía, entradas malformadas, IDs inválidos y cantidades inválidas', async () => {
@@ -153,7 +173,7 @@ test('rechaza lista vacía, entradas malformadas, IDs inválidos y cantidades in
 
 test('rechaza duplicados incluso mezclando ID numérico y texto', async () => {
   const { crear, state } = setup();
-  const res = await crear({ productos: [{ producto_id: 1, cantidad: 1 }, { producto_id: '1', cantidad: 1 }] });
+  const res = await crear({ ...solicitud(), productos: [{ producto_id: 1, cantidad: 1 }, { producto_id: '1', cantidad: 1 }] });
   assert.equal(res.code, 400);
   assert.match(res.body.message, /duplicados/);
   assert.equal(state.ids, undefined);
@@ -173,42 +193,44 @@ test('rechaza productos inexistentes, inactivos, sin juego ', async () => {
 
 test('un producto inválido rechaza el pedido completo', async () => {
   const { crear, state } = setup();
-  const res = await crear({ productos: [{ producto_id: 1, cantidad: 1 }, { producto_id: 2, cantidad: 1 }] });
+  const res = await crear({ metodo_pago: 'paypal', productos: [{ producto_id: 1, cantidad: 1 }, { producto_id: 2, cantidad: 1 }] });
   assert.equal(res.code, 400);
   assert.deepEqual(state.pedidos, []);
   assert.deepEqual(state.detalles, []);
 });
 
-test('tarifas fijas, disponibilidad ilimitada y limite monetario', async () => {
-  for (const [tipo_cuenta, total] of [['principal', '1300.00'], ['secundaria', '520.00']]) {
-    const { crear } = setup([producto({ tipo_cuenta, precio: '0.01', stock: 0 })]);
-    assert.equal((await crear(solicitud())).body.total, total);
-  }
-  assert.equal((await setup().crear({ productos: [{ producto_id: 1, cantidad: 2147483647 }] })).code, 400);
+test('precio, stock y disponibilidad provienen del producto del backend', async () => {
+  const { crear } = setup([producto({ precio: '123.45', stock: 2 })]);
+  assert.equal((await crear(solicitud())).body.total, '246.90');
+  assert.equal((await setup([producto({ stock: 1 })]).crear(solicitud())).code, 400);
+  assert.equal((await setup([producto({ precio: 'precio-falso' })]).crear(solicitud())).code, 400);
 });
 
-test('crea juego y producto bajo demanda con tarifa del servidor', async () => {
-  for (const [tipo_cuenta, total] of [['principal', '650.00'], ['secundaria', '260.00']]) {
-    const { crear, state } = setup([]);
-    const res = await crear({ juego: { rawg_id: 3328, titulo: 'The Witcher 3', tipo_cuenta, precio: '0.01' } });
+test('no crea productos desde RAWG y exige método de pago válido', async () => {
+  assert.equal((await setup([]).crear({ metodo_pago: 'paypal', juego: { rawg_id: 3328, titulo: 'Juego' } })).code, 400);
+  for (const metodo_pago of [undefined, null, 'efectivo']) {
+    assert.equal((await setup().crear({ ...solicitud(), metodo_pago })).code, 400);
+  }
+  for (const metodo_pago of ['paypal', 'oxxo', 'transferencia']) {
+    const { crear, state } = setup();
+    const res = await crear({ ...solicitud(), metodo_pago });
     assert.equal(res.code, 201);
-    assert.equal(res.body.total, total);
-    assert.equal(state.producto.defaults.precio, total);
-    assert.equal(state.juego.where.rawg_id, 3328);
-    assert.equal(state.detalles[0].producto_id, '5');
+    assert.equal(state.pagos[0].metodo, metodo_pago);
   }
 });
 
-test('rechaza juego malformado y peticiones ambiguas', async () => {
-  for (const juego of [null, {}, { rawg_id: -1 }, { rawg_id: 3328, titulo: '', tipo_cuenta: 'principal' },
-    { rawg_id: 3328, titulo: 'Juego', tipo_cuenta: 'gratis' }]) {
-    assert.equal((await setup([]).crear({ juego })).code, 400);
-  }
-  assert.equal((await setup().crear({ juego: {}, productos: [] })).code, 400);
+test('reintentar request_id devuelve el mismo pedido sin duplicarlo', async () => {
+  const app = setup();
+  const primero = await app.crear(solicitud());
+  const segundo = await app.crear(solicitud());
+  assert.equal(primero.code, 201);
+  assert.equal(segundo.body.id, primero.body.id);
+  assert.equal(app.state.pedidos.length, 1);
+  assert.equal(app.state.pagos.length, 1);
 });
 
-test('fallos de consulta, pedido, detalles o commit no dejan escrituras parciales', async () => {
-  for (const fallo of ['consulta', 'pedido', 'detalles', 'commit']) {
+test('fallos de consulta, pedido, detalles, pago o commit no dejan escrituras parciales', async () => {
+  for (const fallo of ['consulta', 'pedido', 'detalles', 'pago', 'commit']) {
     const { crear, state } = setup([producto()], fallo);
     const res = await crear(solicitud());
     assert.equal(res.code, 500, fallo);
@@ -217,6 +239,7 @@ test('fallos de consulta, pedido, detalles o commit no dejan escrituras parciale
     assert.equal(state.commits, 0);
     assert.deepEqual(state.pedidos, []);
     assert.deepEqual(state.detalles, []);
+    assert.deepEqual(state.pagos, []);
     assert.equal(state.logs.length, 1);
   }
 });
