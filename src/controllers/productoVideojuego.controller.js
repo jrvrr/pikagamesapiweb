@@ -43,8 +43,7 @@ const obtenerPorRawgId = async (req, res) => {
         id: String(producto.id),
         tipo_cuenta: producto.tipo_cuenta,
         precio: String(producto.precio),
-        stock: producto.stock,
-        disponible: Boolean(videojuego.activo && producto.activo && producto.stock > 0),
+        disponible: Boolean(videojuego.activo && producto.activo),
       })),
     });
   } catch (error) {

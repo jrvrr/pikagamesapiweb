@@ -199,10 +199,12 @@ test('un producto inválido rechaza el pedido completo', async () => {
   assert.deepEqual(state.detalles, []);
 });
 
-test('precio, stock y disponibilidad provienen del producto del backend', async () => {
+test('el precio y la disponibilidad dependen del backend y del estado activo, no de una cantidad de stock', async () => {
   const { crear } = setup([producto({ precio: '123.45', stock: 2 })]);
   assert.equal((await crear(solicitud())).body.total, '246.90');
-  assert.equal((await setup([producto({ stock: 1 })]).crear(solicitud())).code, 400);
+  assert.equal((await setup([producto({ stock: 0 })]).crear(solicitud())).code, 201);
+  assert.equal((await setup([producto({ stock: 0, activo: false })]).crear(solicitud())).code, 400);
+  assert.equal((await setup([producto({ stock: 0, Videojuego: { titulo: 'Juego inactivo', activo: false } })]).crear(solicitud())).code, 400);
   assert.equal((await setup([producto({ precio: 'precio-falso' })]).crear(solicitud())).code, 400);
 });
 

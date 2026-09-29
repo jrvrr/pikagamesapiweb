@@ -76,9 +76,6 @@ const crearPedido = async (req, res) => {
         if (!['principal', 'secundaria'].includes(producto.tipo_cuenta)) {
           rechazarPedido('Tipo de cuenta inválido');
         }
-        if (!Number.isInteger(producto.stock) || producto.stock < cantidad) {
-          rechazarPedido(`El producto ${producto.id} no tiene stock disponible`);
-        }
         const precioCentavos = centavos(producto.precio);
         const totalCentavos = precioCentavos * cantidad;
         subtotalCentavos += totalCentavos;
