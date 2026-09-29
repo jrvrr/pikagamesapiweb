@@ -12,10 +12,10 @@ const cents = (value) => {
   const [whole, fraction = ''] = String(value).split('.');
   return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
 };
-const respondError = (res, error) => {
+const respondError = (res, error, fallback = 'No se pudo confirmar el pago. Reintenta la consulta del mismo pedido.') => {
   console.error('PayPal:', error);
   return res.status(error.status || 503).json({
-    message: error.status ? error.message : 'No se pudo confirmar el pago. Reintenta la consulta del mismo pedido.',
+    message: error.status ? error.message : fallback,
   });
 };
 
@@ -44,6 +44,9 @@ const crearOrden = async (req, res) => {
         pedido_id: pedido.id, metodo: 'paypal', estado: 'pendiente', monto: pedido.total,
         paypal_request_id: randomUUID(),
       }, { transaction });
+      else if (!pago.paypal_request_id && !pago.referencia_externa) {
+        await pago.update({ paypal_request_id: randomUUID() }, { transaction });
+      }
     });
     const result = await sequelize.transaction(async (transaction) => {
       const pedido = await ownedPedido(id, req.user.id, transaction);
@@ -61,7 +64,7 @@ const crearOrden = async (req, res) => {
       return { id: pago.referencia_externa, pedidoId: String(pedido.id), total: String(pago.monto), currency: 'MXN' };
     });
     res.json(result);
-  } catch (error) { respondError(res, error); }
+  } catch (error) { respondError(res, error, 'No se pudo crear la orden PayPal; no se inició el cobro. Corrige la configuración de PayPal e inténtalo de nuevo con este pedido.'); }
 };
 
 // Todos los caminos toman el mismo bloqueo y releen PayPal dentro de él.

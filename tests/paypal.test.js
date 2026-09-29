@@ -205,7 +205,9 @@ test('reembolso repetido retiene entrega pendiente y evento antiguo no revive el
 test('crear orden reutiliza referencia; fallo al asociarla conserva la clave durable', async () => {
   const app = setup(); app.state.Pago.length = 0;
   app.controls.fail = 'Pago.update';
-  assert.equal((await app.call('crearOrden')).code, 503);
+  const failed = await app.call('crearOrden');
+  assert.equal(failed.code, 503);
+  assert.match(failed.body.message, /No se pudo crear la orden/);
   const key = app.state.Pago[0].paypal_request_id; assert.ok(key);
   assert.equal((await app.call('crearOrden')).body.id, 'ORDER1');
   assert.equal((await app.call('crearOrden')).body.id, 'ORDER1');
@@ -240,8 +242,10 @@ test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante',
 test('service uses configured PayPal environment and verifies webhook signatures', async () => {
   const config = load('config/paypal.js', { dotenv: { config() {} } }, { process: { env: {
     PAYPAL_ENV: 'production', PAYPAL_BASE_URL: 'https://api-m.paypal.com',
-    PAYPAL_CLIENT_ID: 'sandbox-client', PAYPAL_CLIENT_SECRET: 'sandbox-secret', PAYPAL_WEBHOOK_ID: 'WH1',
+    PAYPAL_CLIENT_ID: ' sandbox-client ', PAYPAL_CLIENT_SECRET: ' sandbox-secret ', PAYPAL_WEBHOOK_ID: 'WH1',
   } } }).PAYPAL_CONFIG;
+  assert.equal(config.clientId, 'sandbox-client');
+  assert.equal(config.clientSecret, 'sandbox-secret');
   const calls = [];
   const service = load('services/paypal.service.js', { '../config/paypal': { PAYPAL_CONFIG: config } }, {
     Buffer, AbortSignal, fetch: async (url, options) => {

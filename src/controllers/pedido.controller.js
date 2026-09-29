@@ -1,4 +1,4 @@
-const { sequelize, Pedido, PedidoDetalle, ProductoVideojuego, Videojuego } = require('../models');
+const { sequelize, Pedido, PedidoDetalle, Pago, ProductoVideojuego, Videojuego } = require('../models');
 
 const MAX_CENTAVOS = 9999999999; // DECIMAL(10, 2)
 
@@ -6,27 +6,36 @@ const rechazarPedido = (message) => {
   throw Object.assign(new Error(message), { status: 400 });
 };
 
+const centavos = (value) => {
+  if (!/^\d{1,8}(\.\d{1,2})?$/.test(String(value))) rechazarPedido('Precio de producto inválido');
+  const [entero, decimal = ''] = String(value).split('.');
+  return Number(entero) * 100 + Number(decimal.padEnd(2, '0'));
+};
+
 const crearPedido = async (req, res) => {
   try {
     const nuevoPedido = await sequelize.transaction(async (transaction) => {
-      let productos = req.body?.productos;
-      if (req.body?.juego !== undefined) {
-        const juego = req.body.juego;
-        if (productos !== undefined || !juego ||
-            !Number.isSafeInteger(juego.rawg_id) || juego.rawg_id < 1 ||
-            typeof juego.titulo !== 'string' || !juego.titulo.trim() || juego.titulo.length > 200 ||
-            !['principal', 'secundaria'].includes(juego.tipo_cuenta)) {
-          rechazarPedido('Juego o tipo de cuenta inválido');
-        }
-        const [videojuego] = await Videojuego.findOrCreate({
-          where: { rawg_id: juego.rawg_id },
-          defaults: { titulo: juego.titulo.trim() }, transaction,
-        });
-        const [producto] = await ProductoVideojuego.findOrCreate({
-          where: { videojuego_id: videojuego.id, tipo_cuenta: juego.tipo_cuenta },
-          defaults: { precio: juego.tipo_cuenta === 'principal' ? '650.00' : '260.00' }, transaction,
-        });
-        productos = [{ producto_id: String(producto.id), cantidad: 1 }];
+      const productos = req.body?.productos;
+      const metodoPago = req.body?.metodo_pago;
+      const requestId = req.body?.request_id;
+      if (!['paypal', 'oxxo', 'transferencia'].includes(metodoPago)) {
+        rechazarPedido('Método de pago inválido');
+      }
+      if (typeof requestId !== 'string' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+        rechazarPedido('request_id inválido');
+      }
+      const existente = await Pedido.findOne({
+        where: { usuario_id: req.user.id, request_id: requestId }, transaction,
+      });
+      if (existente) {
+        const pago = await Pago.findOne({ where: { pedido_id: existente.id }, transaction });
+        if (!pago || pago.metodo !== metodoPago) rechazarPedido('request_id ya utilizado');
+        return {
+          id: existente.id, usuario_id: existente.usuario_id, subtotal: existente.subtotal,
+          descuento: existente.descuento, total: existente.total, estado: existente.estado,
+          metodo_pago: pago.metodo,
+        };
       }
       if (!Array.isArray(productos) || productos.length === 0) {
         rechazarPedido('Se requiere una lista de productos no vacía');
@@ -51,6 +60,7 @@ const crearPedido = async (req, res) => {
       const catalogo = await ProductoVideojuego.findAll({
         where: { id: [...cantidades.keys()] },
         include: [{ model: Videojuego, attributes: ['titulo', 'activo'], required: true }],
+        lock: transaction.LOCK?.UPDATE,
         transaction,
       });
       if (catalogo.length !== cantidades.size) {
@@ -66,8 +76,10 @@ const crearPedido = async (req, res) => {
         if (!['principal', 'secundaria'].includes(producto.tipo_cuenta)) {
           rechazarPedido('Tipo de cuenta inválido');
         }
-        // Todos los títulos tienen tarifa fija y disponibilidad ilimitada.
-        const precioCentavos = producto.tipo_cuenta === 'principal' ? 65000 : 26000;
+        if (!Number.isInteger(producto.stock) || producto.stock < cantidad) {
+          rechazarPedido(`El producto ${producto.id} no tiene stock disponible`);
+        }
+        const precioCentavos = centavos(producto.precio);
         const totalCentavos = precioCentavos * cantidad;
         subtotalCentavos += totalCentavos;
         if (!Number.isSafeInteger(subtotalCentavos) || subtotalCentavos > MAX_CENTAVOS) {
@@ -88,6 +100,7 @@ const crearPedido = async (req, res) => {
       const subtotal = (subtotalCentavos / 100).toFixed(2);
       const pedido = await Pedido.create({
         usuario_id: req.user.id,
+        request_id: requestId,
         subtotal,
         descuento: '0.00',
         total: subtotal,
@@ -97,7 +110,14 @@ const crearPedido = async (req, res) => {
         detalles.map((detalle) => ({ ...detalle, pedido_id: pedido.id })),
         { transaction, validate: true },
       );
-      return pedido;
+      await Pago.create({
+        pedido_id: pedido.id, metodo: metodoPago, estado: 'pendiente', monto: pedido.total,
+      }, { transaction });
+      return {
+        id: pedido.id, usuario_id: pedido.usuario_id, subtotal: pedido.subtotal,
+        descuento: pedido.descuento, total: pedido.total, estado: pedido.estado,
+        metodo_pago: metodoPago,
+      };
     });
 
     res.status(201).json(nuevoPedido);

@@ -16,8 +16,8 @@ if (!urls[env] || (configuredUrl && configuredUrl !== urls[env])) {
 const PAYPAL_CONFIG = {
   baseUrl: urls[env],
   env,
-  clientId: process.env.PAYPAL_CLIENT_ID,
-  clientSecret: process.env.PAYPAL_CLIENT_SECRET,
+  clientId: process.env.PAYPAL_CLIENT_ID?.trim(),
+  clientSecret: process.env.PAYPAL_CLIENT_SECRET?.trim(),
   webhookId: process.env.PAYPAL_WEBHOOK_ID,
 };
 

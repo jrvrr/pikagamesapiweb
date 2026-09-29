@@ -11,6 +11,11 @@ const Pedido = sequelize.define('Pedido', {
     type: DataTypes.BIGINT,
     allowNull: false,
   },
+  request_id: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    unique: true,
+  },
   subtotal: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,

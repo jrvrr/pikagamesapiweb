@@ -101,6 +101,7 @@ model CarritoDetalle {
 model Pedido {
   id         BigInt    @id @default(autoincrement())
   usuario_id String @db.Uuid
+  request_id String?   @unique @db.Uuid
   subtotal   Decimal   @db.Decimal(10, 2)
   descuento  Decimal   @default(0) @db.Decimal(10, 2)
   total      Decimal   @db.Decimal(10, 2)
@@ -133,7 +134,7 @@ model PedidoDetalle {
 model Pago {
   id                 BigInt    @id @default(autoincrement())
   pedido_id          BigInt    @unique
-  metodo             String    @db.VarChar(30) // paypal/transferencia
+  metodo             String    @db.VarChar(30) // paypal/oxxo/transferencia
   estado             String    @default("pendiente") @db.VarChar(30)
   referencia_externa String?   @db.VarChar(200)
   monto              Decimal   @db.Decimal(10, 2)
