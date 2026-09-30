@@ -19,11 +19,6 @@ const ProductoVideojuego = sequelize.define('ProductoVideojuego', {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
-  stock: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  },
   activo: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
