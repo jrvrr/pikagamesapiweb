@@ -256,6 +256,7 @@ test('service uses configured PayPal environment and verifies webhook signatures
   await service.capturarOrden('ORDER1', 'CAPTURE1');
   assert.ok(calls.every(({ url }) => url.startsWith('https://api-m.paypal.com/')));
   assert.equal(calls[1].options.headers['PayPal-Request-Id'], 'CREATE1');
+  assert.equal(JSON.parse(calls[1].options.body).payment_source, undefined);
   assert.equal(calls[3].options.headers['PayPal-Request-Id'], 'CAPTURE1');
   assert.equal(await service.verificarWebhook({ headers: {}, body: {} }), false);
   const headers = Object.fromEntries(['auth-algo', 'cert-url', 'transmission-id', 'transmission-sig', 'transmission-time'].map(key => [`paypal-${key}`, 'test']));
