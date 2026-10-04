@@ -240,7 +240,7 @@ test('middleware JWT rechaza tokens inválidos, sin usuario y secreto faltante',
 
 test('service uses configured PayPal environment and verifies webhook signatures', async () => {
   const config = load('config/paypal.js', { dotenv: { config() {} } }, { process: { env: {
-    PAYPAL_ENV: 'production', PAYPAL_BASE_URL: 'https://api-m.paypal.com',
+    PAYPAL_ENV: 'sandbox', PAYPAL_BASE_URL: 'https://api-m.sandbox.paypal.com',
     PAYPAL_CLIENT_ID: ' sandbox-client ', PAYPAL_CLIENT_SECRET: ' sandbox-secret ', PAYPAL_WEBHOOK_ID: 'WH1',
   } } }).PAYPAL_CONFIG;
   assert.equal(config.clientId, 'sandbox-client');
@@ -254,7 +254,8 @@ test('service uses configured PayPal environment and verifies webhook signatures
   });
   await service.crearOrden({ monto: '650.00', pedidoId: '7', requestId: 'CREATE1' });
   await service.capturarOrden('ORDER1', 'CAPTURE1');
-  assert.ok(calls.every(({ url }) => url.startsWith('https://api-m.paypal.com/')));
+  assert.equal(config.env, 'sandbox');
+  assert.ok(calls.every(({ url }) => url.startsWith('https://api-m.sandbox.paypal.com/')));
   assert.equal(calls[1].options.headers['PayPal-Request-Id'], 'CREATE1');
   assert.equal(JSON.parse(calls[1].options.body).payment_source, undefined);
   assert.equal(calls[3].options.headers['PayPal-Request-Id'], 'CAPTURE1');
