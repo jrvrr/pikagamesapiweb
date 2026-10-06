@@ -65,6 +65,11 @@ function setup(catalogo = [producto()], fallo) {
         current.pedidos.push(row);
         return row;
       },
+      async findAll(options) {
+        assert.deepEqual(copy(options.where), { usuario_id: 'usuario-autenticado' });
+        assert.equal(options.include[0], models.PedidoDetalle);
+        return state.listedPedidos || [];
+      },
     },
     PedidoDetalle: {
       async bulkCreate(values, options) {
@@ -103,6 +108,12 @@ function setup(catalogo = [producto()], fallo) {
         json(value) { this.body = copy(value); return this; },
       };
       await context.module.exports.crearPedido({ body, user: { id: 'usuario-autenticado' } }, res);
+      return res;
+    },
+    async listar(pedidos) {
+      state.listedPedidos = pedidos;
+      const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = copy(value); return this; } };
+      await context.module.exports.misPedidos({ user: { id: 'usuario-autenticado' } }, res);
       return res;
     },
   };
@@ -199,10 +210,12 @@ test('un producto inválido rechaza el pedido completo', async () => {
   assert.deepEqual(state.detalles, []);
 });
 
-test('precio, stock y disponibilidad provienen del producto del backend', async () => {
+test('el precio y la disponibilidad dependen del backend y del estado activo, no de una cantidad de stock', async () => {
   const { crear } = setup([producto({ precio: '123.45', stock: 2 })]);
   assert.equal((await crear(solicitud())).body.total, '246.90');
-  assert.equal((await setup([producto({ stock: 1 })]).crear(solicitud())).code, 400);
+  assert.equal((await setup([producto({ stock: 0 })]).crear(solicitud())).code, 201);
+  assert.equal((await setup([producto({ stock: 0, activo: false })]).crear(solicitud())).code, 400);
+  assert.equal((await setup([producto({ stock: 0, Videojuego: { titulo: 'Juego inactivo', activo: false } })]).crear(solicitud())).code, 400);
   assert.equal((await setup([producto({ precio: 'precio-falso' })]).crear(solicitud())).code, 400);
 });
 
@@ -227,6 +240,17 @@ test('reintentar request_id devuelve el mismo pedido sin duplicarlo', async () =
   assert.equal(segundo.body.id, primero.body.id);
   assert.equal(app.state.pedidos.length, 1);
   assert.equal(app.state.pagos.length, 1);
+});
+
+test('los pedidos pendientes dejan de aparecer del perfil a las 24 horas sin borrarse', async () => {
+  const ahora = Date.now();
+  const app = setup();
+  const res = await app.listar([
+    { id: 'reciente', estado: 'pendiente_pago', created_at: new Date(ahora - 23 * 60 * 60 * 1000).toISOString() },
+    { id: 'limite', estado: 'pendiente', created_at: new Date(ahora - 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'pagado', estado: 'pagado', created_at: new Date(ahora - 48 * 60 * 60 * 1000).toISOString() },
+  ]);
+  assert.deepEqual(res.body.map((pedido) => pedido.id), ['reciente', 'pagado']);
 });
 
 test('fallos de consulta, pedido, detalles, pago o commit no dejan escrituras parciales', async () => {

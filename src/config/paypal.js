@@ -7,8 +7,7 @@ const urls = {
 const configuredUrl = (process.env.PAYPAL_BASE_URL || '').replace(/\/+$/, '');
 const configuredEnv = (process.env.PAYPAL_ENV || '').toLowerCase();
 const inferredEnv = Object.keys(urls).find((env) => urls[env] === configuredUrl);
-const env = configuredEnv === 'production' ? 'live' : configuredEnv || inferredEnv ||
-  (process.env.NODE_ENV === 'production' ? 'live' : 'sandbox');
+const env = configuredEnv === 'production' ? 'live' : configuredEnv || inferredEnv || 'live';
 if (!urls[env] || (configuredUrl && configuredUrl !== urls[env])) {
   throw new Error('PAYPAL_ENV y PAYPAL_BASE_URL deben seleccionar Sandbox o Live de forma consistente');
 }

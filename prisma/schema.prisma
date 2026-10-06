@@ -39,7 +39,6 @@ model ProductoVideojuego {
   videojuego_id BigInt
   tipo_cuenta   String    @db.VarChar(20) // principal/secundaria
   precio        Decimal   @db.Decimal(10, 2)
-  stock         Int       @default(0)
   activo        Boolean   @default(true)
   created_at    DateTime  @default(now()) @db.Timestamptz
 

@@ -44,9 +44,6 @@ const crearOrden = ({ monto, pedidoId, requestId }) => request('/v2/checkout/ord
       description: `Pedido PikaGames #${pedidoId}`,
       amount: { currency_code: 'MXN', value: String(monto) },
     }],
-    payment_source: { paypal: { experience_context: {
-      brand_name: 'PikaGames', user_action: 'PAY_NOW', shipping_preference: 'NO_SHIPPING',
-    } } },
   },
 });
 const capturarOrden = (id, requestId) => request(`/v2/checkout/orders/${encodeURIComponent(id)}/capture`, {

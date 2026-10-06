@@ -15,6 +15,7 @@ app.use(morgan('dev'));
 
 // Importar rutas
 const authRoutes = require('./routes/auth.routes');
+const usuariosRoutes = require('./routes/usuarios.routes');
 const videojuegoRoutes = require('./routes/videojuego.routes');
 const pedidoRoutes = require('./routes/pedido.routes');
 const comentarioRoutes = require('./routes/comentario.routes');
@@ -28,6 +29,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/videojuegos', videojuegoRoutes);
 app.use('/api/productos', productoVideojuegoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
