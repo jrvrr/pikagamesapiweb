@@ -16,6 +16,7 @@ const Entrega = require('./entrega.model');
 const CuentaProducto = require('./cuentaProducto.model');
 const Comentario = require('./comentario.model');
 const Favorito = require('./favorito.model');
+const PasswordResetToken = require('./passwordResetToken.model');
 
 // Relaciones Videojuego <-> ProductoVideojuego
 Videojuego.hasMany(ProductoVideojuego, { foreignKey: 'videojuego_id' });
@@ -60,6 +61,7 @@ CuentaProducto.belongsTo(Pedido, { foreignKey: 'pedido_id' });
 // Relaciones Favoritos
 Usuario.hasMany(Favorito, { foreignKey: 'usuario_id', onDelete: 'CASCADE' });
 Favorito.belongsTo(Usuario, { foreignKey: 'usuario_id' });
+PasswordResetToken.belongsTo(Usuario, { foreignKey: 'usuario_id' });
 
 module.exports = {
   sequelize,
@@ -77,5 +79,6 @@ module.exports = {
   Entrega,
   CuentaProducto,
   Comentario,
-  Favorito
+  Favorito,
+  PasswordResetToken
 };

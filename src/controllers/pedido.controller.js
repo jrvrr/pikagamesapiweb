@@ -133,7 +133,13 @@ const misPedidos = async (req, res) => {
       where: { usuario_id: req.user.id },
       include: [PedidoDetalle]
     });
-    res.json(pedidos);
+    const limitePendiente = Date.now() - 24 * 60 * 60 * 1000;
+    const visibles = pedidos.filter((pedido) => {
+      if (!['pendiente', 'pendiente_pago'].includes(String(pedido.estado).toLowerCase())) return true;
+      const creadoEn = new Date(pedido.created_at).getTime();
+      return Number.isNaN(creadoEn) || creadoEn > limitePendiente;
+    });
+    res.json(visibles);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener pedidos', error: error.message });
   }
