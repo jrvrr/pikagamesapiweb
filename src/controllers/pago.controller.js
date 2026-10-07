@@ -41,7 +41,6 @@ const serializarPago = (pago) => {
 const obtenerPagosAdmin = async (req, res) => {
   try {
     const pagos = await Pago.findAll({
-      where: { metodo: METODOS_MANUALES },
       include: [
         {
           model: Pedido,

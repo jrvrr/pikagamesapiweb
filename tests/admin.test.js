@@ -20,7 +20,7 @@ const response = () => ({
   json(body) { this.body = body; return this; },
 });
 
-test('admin solo lista pagos manuales y no expone modelos completos', async () => {
+test('admin lista todos los pagos y no expone modelos completos', async () => {
   let query;
   const controller = load({
     '../models': {
@@ -34,7 +34,7 @@ test('admin solo lista pagos manuales y no expone modelos completos', async () =
   const res = response();
   await controller.obtenerPagosAdmin({}, res);
   assert.equal(res.code, 200);
-  assert.equal(query.where.metodo.join(','), 'transferencia,oxxo');
+  assert.equal(query.where, undefined);
   assert.equal(res.body[0].usuario.id, '2');
   assert.equal(res.body[0].usuario.nombre, 'Ana López');
   assert.equal(res.body[0].usuario.email, 'ana@example.com');
