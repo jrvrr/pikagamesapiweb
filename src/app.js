@@ -21,6 +21,7 @@ const pedidoRoutes = require('./routes/pedido.routes');
 const comentarioRoutes = require('./routes/comentario.routes');
 const favoritosRoutes = require('./routes/favoritos.routes');
 const paypalRoutes = require('./routes/paypal.routes');
+const pagoRoutes = require('./routes/pago.routes');
 const productoVideojuegoRoutes = require('./routes/productoVideojuego.routes');
 
 // Rutas base
@@ -36,6 +37,7 @@ app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/comentarios', comentarioRoutes);
 app.use('/api/favoritos', favoritosRoutes);
 app.use('/api/paypal', paypalRoutes);
+app.use('/api/pagos', pagoRoutes);
 
 // El esquema se administra exclusivamente con migraciones SQL explícitas.
 const PORT = process.env.PORT || 5000;
